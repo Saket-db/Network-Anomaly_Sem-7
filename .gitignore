@@ -1,15 +1,15 @@
-# Ignore all CSV files (inside and outside data/)
-*.csv
+# Ignore generated CSV outputs in data/ (and subfolders)
+# (Keeps the data/ folder but ignores CSV files that are generated at runtime.)
+/data/*.csv
+/data/**/*.csv
 
-# But keep this one if needed
-#!data/keep_this.csv
+# If you absolutely need to keep one example CSV in the repo, whitelist it:
+# !/data/keep_this.csv
+!/.gitkeep
 
-# Ignore only CSVs in data/ (including subfolders)
-#/data/*.csv
-#/data/**/*.csv
-
-# Keep data folder structure
-!/data/.gitkeep
+# (Remove any global CSV ignore if you intentionally track some CSVs outside data/)
+# Don't ignore all CSVs globally — keep control under /data/.
+# *.csv
 
 # Common ignores
 __pycache__/
