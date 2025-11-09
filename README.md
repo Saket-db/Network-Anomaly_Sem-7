@@ -24,6 +24,7 @@ Key files & locations
   - model/imputer.pkl
   - model/label_encoders.pkl
   - model/trained_columns.pkl
+  - model/random_forest_model.pkl  # Optional: supervised RF trained on the same labeled CSV when >=2 classes
 - capture/live_capture.py — runs tshark and writes data/live_traffic.csv
 - detection/anomaly_detection.py — loads artifacts and writes data/anomalies.csv
 - app.py — Streamlit UI to start/stop capture and run detection

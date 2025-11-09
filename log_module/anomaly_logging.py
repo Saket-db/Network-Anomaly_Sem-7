@@ -6,15 +6,14 @@ if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
 
 LOG_FILE = os.path.join(LOG_DIR, "anomaly_detection.log")
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO)
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format="%(asctime)s %(message)s")
 
 
 def log_anomaly(message):
-    print(f"Anomaly Detected: {message}")
-    logging.info(f"Anomaly Detected: {message}")
+    # Write to logfile only; do NOT print here to avoid duplicate terminal lines.
+    logging.info(message)
 
 
 def get_logs():
     with open(LOG_FILE, "r") as file:
-        logs = file.read()
-    return logs
+        return file.read()
