@@ -6,6 +6,9 @@ import joblib
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
+# --- ADDED: metrics imports ---
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
 HERE = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(HERE, ".."))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
@@ -93,6 +96,13 @@ if not csv_path:
     raise FileNotFoundError(f"live_traffic.csv not found in {DATA_DIR}")
 
 df = pd.read_csv(csv_path, dtype=str)  # read raw
+
+# --- NEW: preserve original label/anomaly column from CSV so we can compute metrics later ---
+if "label" in df.columns:
+    df["_true_label"] = df["label"]
+elif "anomaly" in df.columns:
+    # keep the original anomaly column values (may be 0/1 or true/false)
+    df["_true_label"] = df["anomaly"]
 
 # --- Minimal preprocessing: normalize port fields so numeric coercion works ---
 def _first_port(val):
@@ -193,7 +203,8 @@ if rf_model is not None:
     try:
         # Get RF predictions - class 1 = anomaly, class 0 = normal (as trained)
         rf_pred_raw = rf_model.predict(X_scaled)
-        df["rf_pred"] = rf_pred_raw.astype(str)
+        # store numeric prediction for metric computation
+        df["rf_pred"] = rf_pred_raw.astype(int)
         
         # Count anomalies: RF predicts class 1 for anomalies
         rf_count = int((rf_pred_raw == 1).sum())
@@ -274,6 +285,55 @@ try:
 		
 except Exception as _e:
 	print(f"Warning: failed to compute/log summary counts: {_e}")
+
+# --- NEW: compute and log per-model metrics when original labels were preserved ---
+def _to_label_val(v):
+    if pd.isna(v):
+        return np.nan
+    s = str(v).strip().lower()
+    if s in ("1", "true", "t", "yes", "y"):
+        return 1
+    if s in ("0", "false", "f", "no", "n"):
+        return 0
+    try:
+        nv = float(s)
+        return 1 if nv == 1 else 0
+    except Exception:
+        return np.nan
+
+try:
+    if "_true_label" in df.columns and df["_true_label"].notna().sum() > 0:
+        y_true = df["_true_label"].apply(_to_label_val).astype(float)
+        # Only keep rows with a valid truth value
+        valid_idx = y_true.notna()
+        if valid_idx.sum() > 0:
+            y = y_true[valid_idx].astype(int).values
+            iso_pred_arr = df.loc[valid_idx, "iso_anomaly"].astype(int).values
+            rf_pred_arr = df.loc[valid_idx, "rf_pred"].fillna(0).astype(int).values if "rf_pred" in df.columns else np.zeros(len(y), dtype=int)
+            ens_pred_arr = df.loc[valid_idx, "ensemble_anomaly"].astype(int).values
+
+            def _safe_metrics(name, y_true_arr, y_pred_arr):
+                acc = accuracy_score(y_true_arr, y_pred_arr)
+                prec = precision_score(y_true_arr, y_pred_arr, zero_division=0)
+                rec = recall_score(y_true_arr, y_pred_arr, zero_division=0)
+                f1 = f1_score(y_true_arr, y_pred_arr, zero_division=0)
+                return acc, prec, rec, f1
+
+            iso_acc, iso_prec, iso_rec, iso_f1 = _safe_metrics("IsolationForest", y, iso_pred_arr)
+            rf_acc, rf_prec, rf_rec, rf_f1 = _safe_metrics("RandomForest", y, rf_pred_arr)
+            ens_acc, ens_prec, ens_rec, ens_f1 = _safe_metrics("Ensemble", y, ens_pred_arr)
+
+            # print summarised accuracies
+            print(f"[METRICS] IsolationForest — accuracy: {iso_acc:.5f}, precision: {iso_prec:.5f}, recall: {iso_rec:.5f}, f1: {iso_f1:.5f}")
+            print(f"[METRICS] RandomForest    — accuracy: {rf_acc:.5f}, precision: {rf_prec:.5f}, recall: {rf_rec:.5f}, f1: {rf_f1:.5f}")
+            print(f"[METRICS] Ensemble        — accuracy: {ens_acc:.5f}, precision: {ens_prec:.5f}, recall: {ens_rec:.5f}, f1: {ens_f1:.5f}")
+
+            # log same lines via _safe_log
+            _safe_log(f"[METRICS] IsolationForest — accuracy: {iso_acc:.5f}, precision: {iso_prec:.5f}, recall: {iso_rec:.5f}, f1: {iso_f1:.5f}")
+            _safe_log(f"[METRICS] RandomForest    — accuracy: {rf_acc:.5f}, precision: {rf_prec:.5f}, recall: {rf_rec:.5f}, f1: {rf_f1:.5f}")
+            _safe_log(f"[METRICS] Ensemble        — accuracy: {ens_acc:.5f}, precision: {ens_prec:.5f}, recall: {ens_rec:.5f}, f1: {ens_f1:.5f}")
+except Exception as e:
+    print(f"Warning: failed to compute metrics: {e}")
 
 # Write anomalies.csv for downstream components (use ensemble decision by default)
 out_path = os.path.join(DATA_DIR, "anomalies.csv")
