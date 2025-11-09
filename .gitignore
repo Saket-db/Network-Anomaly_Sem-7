@@ -1,0 +1,18 @@
+# Ignore all CSV files (inside and outside data/)
+*.csv
+
+# But keep this one if needed
+#!data/keep_this.csv
+
+# Ignore only CSVs in data/ (including subfolders)
+#/data/*.csv
+#/data/**/*.csv
+
+# Keep data folder structure
+!/data/.gitkeep
+
+# Common ignores
+__pycache__/
+*.pyc
+.env
+venv/
